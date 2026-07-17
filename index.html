@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>こどもしょうぎ</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌸</text></svg>">
+<style>
+  :root{
+    --board-bg:#f3c778;
+    --board-line:#8a5a2b;
+    --cell: min(9.6vw, 52px);
+    --accent:#ff7043;
+    --accent2:#42a5f5;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html,body{ height:100%; }
+  body{
+    font-family:"Hiragino Maru Gothic ProN","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+    background:linear-gradient(160deg,#fff8e7 0%,#ffe9c7 60%,#ffd9a8 100%);
+    display:flex; flex-direction:column; align-items:center;
+    padding:8px; min-height:100%;
+    user-select:none; -webkit-user-select:none;
+  }
+  header{
+    width:100%; max-width:560px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:4px 2px; flex-wrap:wrap; gap:4px;
+  }
+  h1{
+    font-size:22px; color:#7a4a12; letter-spacing:2px;
+    text-shadow:1px 1px 0 #fff;
+  }
+  .btns{ display:flex; gap:6px; flex-wrap:wrap; }
+  button{
+    font-family:inherit; font-size:13px; font-weight:bold;
+    border:none; border-radius:14px; padding:7px 11px;
+    background:#fff; color:#7a4a12; cursor:pointer;
+    box-shadow:0 2px 0 #d9b98c;
+  }
+  button:active{ transform:translateY(2px); box-shadow:none; }
+  button.primary{ background:var(--accent); color:#fff; box-shadow:0 3px 0 #c94f24; }
+  button.blue{ background:var(--accent2); color:#fff; box-shadow:0 3px 0 #1976d2; }
+
+  #turnBar{
+    margin:6px 0 2px; font-size:17px; font-weight:bold; color:#5d3a10;
+    background:#fff; border-radius:999px; padding:6px 20px;
+    box-shadow:0 2px 6px rgba(120,70,10,.15);
+    min-height:34px; display:flex; align-items:center; gap:8px;
+  }
+  #turnBar .dot{ width:12px; height:12px; border-radius:50%; background:var(--accent); animation:blink 1s infinite alternate; }
+  @keyframes blink{ from{opacity:.3} to{opacity:1} }
+
+  .hand{
+    width:calc(var(--cell) * 9 + 10px);
+    min-height:52px;
+    /* gap は隣の駒と当たり判定（44px）が重ならない幅にしてある */
+    display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:4px 6px; margin:4px 0;
+    background:rgba(255,255,255,.55); border-radius:12px;
+  }
+  .hand .label{ font-size:11px; color:#8a5a2b; font-weight:bold; margin-right:2px; }
+  .handpiece{
+    position:relative; cursor:pointer;
+    width:calc(var(--cell) * .82); height:calc(var(--cell) * .9);
+    border-radius:10px;
+  }
+  /* 駒の絵はスマホだと約31pxで指には小さい。
+     見た目を変えずに当たり判定だけ44px（指1本の目安）へ広げる。 */
+  .handpiece::before{
+    content:""; position:absolute;
+    top:50%; left:50%; transform:translate(-50%,-50%);
+    width:max(44px, 100%); height:max(44px, 100%);
+  }
+  .handpiece .cnt{
+    position:absolute; right:-5px; bottom:-3px; z-index:2;
+    background:var(--accent2); color:#fff; font-size:11px; font-weight:bold;
+    border-radius:999px; padding:1px 5px; border:2px solid #fff;
+  }
+  /* 選択枠は .piece ではなく .handpiece に描く。
+     .piece は clip-path で五角形に切り抜いてあり、外側に描かれる outline は切り取られて見えないため。 */
+  .handpiece.sel{ background:#ffe082; box-shadow:0 0 0 3px var(--accent); }
+
+  /* つめしょうぎ */
+  .tsumebar{ display:flex; gap:6px; margin:2px 0 4px; }
+  .tsumebar button{ font-size:12px; padding:6px 10px; }
+  .tsec{ font-size:14px; font-weight:bold; color:#7a4a12; text-align:left; margin-top:6px; }
+  .tgrid{ display:grid; grid-template-columns:repeat(10,1fr); gap:4px; margin:6px 0 10px; }
+  .tgrid button{ padding:7px 0; border-radius:8px; font-size:13px; box-shadow:0 2px 0 #d9b98c; }
+  .tgrid button.done{ background:#66bb6a; color:#fff; box-shadow:0 2px 0 #388e3c; }
+
+  #board{
+    display:grid;
+    grid-template-columns:repeat(9, var(--cell));
+    grid-template-rows:repeat(9, var(--cell));
+    background:var(--board-bg);
+    border:5px solid var(--board-line); border-radius:8px;
+    box-shadow:0 8px 22px rgba(120,70,10,.25);
+  }
+  .cell{
+    border:1px solid rgba(138,90,43,.55);
+    position:relative; display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+  }
+  .cell.sel{ background:#ffe082; }
+  .cell.last{ background:#ffd9b0; box-shadow:inset 0 0 0 2px #ff9800; }
+  .cell.dest::after{
+    content:""; position:absolute; width:34%; height:34%;
+    background:rgba(67,160,71,.75); border-radius:50%;
+    animation:pop .5s ease; z-index:1;
+  }
+  .cell.dest.hascap::after{
+    width:86%; height:86%; background:none;
+    border:4px dashed rgba(229,57,53,.85); border-radius:14px;
+  }
+  @keyframes pop{ from{ transform:scale(.2);} to{ transform:scale(1);} }
+
+  .piece{
+    width:88%; height:92%;
+    clip-path:polygon(50% 0%, 88% 20%, 98% 100%, 2% 100%, 12% 20%);
+    background:linear-gradient(170deg,#ffe9bd 0%,#f0c176 70%,#dda94f 100%);
+    display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+    padding-bottom:4%;
+    filter:drop-shadow(0 2px 1px rgba(90,50,0,.4));
+    position:relative; z-index:1;
+  }
+  .piece.gote{ transform:rotate(180deg); }
+  .piece .kanji{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    font-weight:800; font-size:calc(var(--cell) * .42); line-height:1.05; color:#3a2005;
+  }
+  .piece .kana{ font-size:calc(var(--cell) * .17); color:#7a4a12; line-height:1; }
+  .piece.prom .kanji, .piece.prom .kana{ color:#d32f2f; }
+
+  /* オーバーレイ共通 */
+  .overlay{
+    position:fixed; inset:0; background:rgba(60,35,5,.55);
+    display:flex; align-items:center; justify-content:center; z-index:50;
+    padding:14px;
+  }
+  .card{
+    background:#fffaf0; border-radius:22px; padding:22px 20px;
+    max-width:480px; width:100%; max-height:88vh; overflow-y:auto;
+    text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.35);
+  }
+  .card h2{ color:#7a4a12; margin-bottom:14px; font-size:21px; }
+  .card p{ color:#5d3a10; font-size:14px; line-height:1.9; text-align:left; }
+  .bigbtn{
+    display:block; width:100%; font-size:18px; padding:15px;
+    margin:10px 0; border-radius:16px;
+  }
+  .hidden{ display:none !important; }
+
+  /* おうて・かちトースト */
+  #toast{
+    position:fixed; top:38%; left:50%; transform:translate(-50%,-50%) scale(0);
+    font-size:54px; font-weight:900; color:#fff; z-index:60;
+    background:var(--accent); padding:14px 40px; border-radius:24px;
+    box-shadow:0 10px 30px rgba(200,60,0,.5);
+    pointer-events:none; letter-spacing:6px;
+  }
+  #toast.show{ animation:toastIn 1.2s ease forwards; }
+  @keyframes toastIn{
+    0%{ transform:translate(-50%,-50%) scale(0) rotate(-8deg);}
+    25%{ transform:translate(-50%,-50%) scale(1.15) rotate(2deg);}
+    35%{ transform:translate(-50%,-50%) scale(1);}
+    80%{ transform:translate(-50%,-50%) scale(1); opacity:1;}
+    100%{ transform:translate(-50%,-50%) scale(1.1); opacity:0;}
+  }
+
+  /* こまのうごき ずかん */
+  .zukan{ display:flex; flex-wrap:wrap; gap:12px; justify-content:center; }
+  .zitem{ width:128px; background:#fff; border-radius:12px; padding:8px; box-shadow:0 2px 6px rgba(120,70,10,.15); }
+  .zitem .zname{ font-weight:bold; color:#5d3a10; font-size:13px; margin-bottom:4px; }
+  .zgrid{ display:grid; grid-template-columns:repeat(5,20px); grid-template-rows:repeat(5,20px); margin:0 auto; width:max-content; }
+  .zgrid div{ border:1px solid #d8b98a; font-size:12px; display:flex; align-items:center; justify-content:center; background:#fdf3df; }
+  .zgrid .me{ background:#f0c176; font-weight:bold; }
+  .zgrid .st{ background:#a5d6a7; }
+  .zgrid .sl{ background:#ffe082; color:#e65100; font-weight:bold; }
+  .zitem .zdesc{ font-size:11px; color:#6d4c1b; margin-top:5px; line-height:1.5; text-align:left; }
+
+  /* 紙ふぶき */
+  .confetti{
+    position:fixed; top:-20px; width:10px; height:16px; z-index:70;
+    animation:fall linear forwards; pointer-events:none; border-radius:2px;
+  }
+  @keyframes fall{
+    to{ transform:translateY(110vh) rotate(720deg); }
+  }
+  footer{ font-size:11px; color:#a1793f; margin:8px 0 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🌸 こどもしょうぎ</h1>
+  <div class="btns">
+    <button id="btnHow">あそびかた</button>
+    <button id="btnZukan">こまのうごき</button>
+    <button id="btnSound">🔊</button>
+    <button id="btnUndo">まった</button>
+    <button id="btnReset" class="blue">はじめから</button>
+  </div>
+</header>
+
+<div id="turnBar"><span class="dot"></span><span id="turnText">じゅんびちゅう…</span></div>
+
+<div class="hand" id="handG"><span class="label">あいての<br>もちごま</span></div>
+<div id="board"></div>
+<div class="hand" id="handS"><span class="label">きみの<br>もちごま</span></div>
+<div id="tsumeBar" class="tsumebar hidden">
+  <button id="btnTsumeList">📋 もんだい</button>
+  <button id="btnTsumeAns">💡 こたえ</button>
+  <button id="btnTsumeMode">🏠 モード</button>
+</div>
+
+<footer>とった こまは じぶんの もちごまに なるよ</footer>
+
+<div id="toast"></div>
+
+<!-- モードせんたく -->
+<div class="overlay" id="ovMode">
+  <div class="card">
+    <h2>🌸 こどもしょうぎ 🌸</h2>
+    <button class="bigbtn hidden" id="btnResume" style="background:#66bb6a; box-shadow:0 3px 0 #388e3c; color:#fff;">▶ つづきから あそぶ</button>
+    <button class="bigbtn" id="modePractice" style="background:#ffca28; box-shadow:0 3px 0 #f9a825; color:#5d3a10;">🐣 れんしゅうで おぼえる</button>
+    <button class="bigbtn" id="modeTsume" style="background:#ab47bc; box-shadow:0 3px 0 #7b1fa2; color:#fff;">🧩 つめしょうぎ 100もん</button>
+    <button class="bigbtn primary" id="modeCpu">🤖 コンピュータと たいせん</button>
+    <button class="bigbtn blue" id="modeTwo">👫 ふたりで たいせん</button>
+    <p style="text-align:center; margin-top:8px;">はじめてなら「れんしゅう」から！<br>コンピュータは よわめだよ。まけても「まった」で やりなおせるよ！<br>とちゅうで やめても じどうで ほぞんされるよ。</p>
+  </div>
+</div>
+
+<!-- れんしゅうモード ステージえらび -->
+<div class="overlay hidden" id="ovPractice">
+  <div class="card">
+    <h2>🐣 れんしゅうモード</h2>
+    <p style="text-align:center; margin-bottom:6px;">こまを へらした しょうぎで、すこしずつ おぼえよう！<br>コンピュータと たいせんするよ。</p>
+    <button class="bigbtn" data-stage="st1">1️⃣ ふ だけで たいせん</button>
+    <button class="bigbtn" data-stage="st2">2️⃣ ひ・かく が とうじょう！</button>
+    <button class="bigbtn" data-stage="st3">3️⃣ きん・ぎん が とうじょう！</button>
+    <button class="bigbtn" data-stage="st4">4️⃣ けい・きょう が とうじょう！</button>
+    <button class="bigbtn primary" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- つめしょうぎ もんだいえらび -->
+<div class="overlay hidden" id="ovTsume">
+  <div class="card">
+    <h2>🧩 つめしょうぎ</h2>
+    <p style="text-align:center; margin-bottom:2px;">あいての 玉（ぎょく）を つませたら せいかい！<br><span style="color:#388e3c; font-weight:bold;">みどり</span>の ばんごうは クリアずみだよ。</p>
+    <div class="tsec">1てづめ（だい1〜70もん）：1かいで つませてね</div>
+    <div class="tgrid" id="tsumeGrid1"></div>
+    <div class="tsec">3てづめ（だい71〜100もん）：おうて→あいて→つみ！</div>
+    <div class="tgrid" id="tsumeGrid3"></div>
+    <button class="bigbtn primary" id="btnTsumeClose">とじる</button>
+  </div>
+</div>
+
+<!-- つめしょうぎ せいかい -->
+<div class="overlay hidden" id="ovTsumeClear">
+  <div class="card">
+    <h2 id="tsumeClearText" style="font-size:26px;">🎉 せいかい！</h2>
+    <button class="bigbtn primary" id="btnTsumeNext">つぎの もんだいへ ▶</button>
+    <button class="bigbtn" id="btnTsumeBackList">もんだいを えらぶ</button>
+  </div>
+</div>
+
+<!-- なる？ -->
+<div class="overlay hidden" id="ovProm">
+  <div class="card">
+    <h2>✨ なる？（パワーアップ）</h2>
+    <p style="text-align:center;">あいての じんちに はいったよ！<br>こまを うらがえして つよくできるよ。</p>
+    <button class="bigbtn primary" id="promYes">なる！✨</button>
+    <button class="bigbtn" id="promNo">ならない</button>
+  </div>
+</div>
+
+<!-- かち！ -->
+<div class="overlay hidden" id="ovWin">
+  <div class="card">
+    <h2 id="winText" style="font-size:30px;"></h2>
+    <p id="winSub" style="text-align:center;"></p>
+    <button class="bigbtn hidden" id="btnNext" style="background:#66bb6a; box-shadow:0 3px 0 #388e3c; color:#fff;">つぎの ステージへ ▶</button>
+    <button class="bigbtn primary" id="btnAgain">もういちど あそぶ</button>
+    <button class="bigbtn" id="btnChangeMode">モードを かえる</button>
+  </div>
+</div>
+
+<!-- あそびかた -->
+<div class="overlay hidden" id="ovHow">
+  <div class="card">
+    <h2>📖 あそびかた</h2>
+    <p>
+      🎯 <b>あいての「玉（ぎょく）」を つかまえたら かち！</b><br><br>
+      1️⃣ じぶんの こまを タッチすると、すすめる ばしょが <span style="color:#2e7d32;">●みどり</span> で ひかるよ。<br>
+      2️⃣ ひかった ばしょを タッチすると こまが うごくよ。<br>
+      3️⃣ あいての こまが いる ばしょに すすむと、その こまを <b>とれる</b>よ。<br>
+      4️⃣ とった こまは「もちごま」に なって、あいてる ばしょに <b>うてる</b>よ。もちごまを タッチしてみてね。<br>
+      5️⃣ あいての じんち（むこう3れつ）に はいると「なる」ことが できて、こまが <span style="color:#d32f2f;">あかい じ</span>に かわって つよくなるよ。<br><br>
+      💡 「おうて！」と でたら、じぶんの 王さまが ねらわれてるよ。まもってね！<br>
+      💡 しっぱいしたら「まった」ボタンで 1かい まえに もどれるよ。
+    </p>
+    <button class="bigbtn primary" data-close>とじる</button>
+  </div>
+</div>
+
+<!-- こまのうごき -->
+<div class="overlay hidden" id="ovZukan">
+  <div class="card" style="max-width:640px;">
+    <h2>📗 こまのうごき ずかん</h2>
+    <div class="zukan" id="zukanBox"></div>
+    <p style="margin-top:10px; text-align:center;"><span style="background:#a5d6a7; padding:1px 8px; border-radius:4px;">みどり</span>＝1マス すすめる ／ <span style="background:#ffe082; padding:1px 8px; border-radius:4px;">きいろ→</span>＝どこまでも すすめる</p>
+    <button class="bigbtn primary" data-close>とじる</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* =====================  ルールエンジン  ===================== */
+const S='S', G='G';
+const GOLD=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,0]];
+const ORTHO=[[-1,0],[1,0],[0,-1],[0,1]];
+const DIAG=[[-1,-1],[-1,1],[1,-1],[1,1]];
+const DEFS={
+  FU:{steps:[[-1,0]]},
+  KY:{slides:[[-1,0]]},
+  KE:{steps:[[-2,-1],[-2,1]]},
+  GI:{steps:[[-1,-1],[-1,0],[-1,1],[1,-1],[1,1]]},
+  KI:{steps:GOLD},
+  KA:{slides:DIAG},
+  HI:{slides:ORTHO},
+  OU:{steps:[...ORTHO,...DIAG]}
+};
+const HAND_ORDER=['HI','KA','KI','GI','KE','KY','FU'];
+const VAL={FU:1,KY:3,KE:3,GI:5,KI:6,KA:8,HI:9,OU:2000};
+const PVAL={FU:6,KY:6,KE:6,GI:6,KA:10,HI:11};
+
+function other(o){ return o===S?G:S; }
+function defOf(t,prom){
+  if(prom){
+    if(t==='FU'||t==='KY'||t==='KE'||t==='GI') return {steps:GOLD};
+    if(t==='KA') return {slides:DIAG, steps:ORTHO};
+    if(t==='HI') return {slides:ORTHO, steps:DIAG};
+  }
+  return DEFS[t];
+}
+function emptyHand(){ return {FU:0,KY:0,KE:0,GI:0,KI:0,KA:0,HI:0}; }
+
+function newGame(){
+  const b=[...Array(9)].map(()=>Array(9).fill(null));
+  const back=['KY','KE','GI','KI','OU','KI','GI','KE','KY'];
+  for(let c=0;c<9;c++){
+    b[0][c]={t:back[c],o:G,p:false};
+    b[8][c]={t:back[c],o:S,p:false};
+    b[2][c]={t:'FU',o:G,p:false};
+    b[6][c]={t:'FU',o:S,p:false};
+  }
+  b[1][1]={t:'HI',o:G,p:false}; b[1][7]={t:'KA',o:G,p:false};
+  b[7][1]={t:'KA',o:S,p:false}; b[7][7]={t:'HI',o:S,p:false};
+  return {board:b, hands:{S:emptyHand(),G:emptyHand()}, turn:S, over:null, last:null};
+}
+// れんしゅうモード: 駒を減らした初期配置（先手側の定義を後手側へ点対称にコピー）
+function customGame(sentePieces){
+  const b=[...Array(9)].map(()=>Array(9).fill(null));
+  for(const [r,c,t] of sentePieces){
+    b[r][c]={t,o:S,p:false};
+    b[8-r][8-c]={t,o:G,p:false};
+  }
+  return {board:b, hands:{S:emptyHand(),G:emptyHand()}, turn:S, over:null, last:null};
+}
+const PAWNROW = cols => cols.map(c=>[6,c,'FU']);
+const SETUPS={
+  st1:{ label:'れんしゅう1', next:'st2',
+    build:()=>customGame([[8,4,'OU'], ...PAWNROW([0,1,2,3,4,5,6,7,8])]) },
+  st2:{ label:'れんしゅう2', next:'st3',
+    build:()=>customGame([[8,4,'OU'],[7,1,'KA'],[7,7,'HI'], ...PAWNROW([3,4,5])]) },
+  st3:{ label:'れんしゅう3', next:'st4',
+    build:()=>customGame([[8,4,'OU'],[8,3,'KI'],[8,5,'KI'],[8,2,'GI'],[8,6,'GI'], ...PAWNROW([2,3,4,5,6])]) },
+  st4:{ label:'れんしゅう4', next:null,
+    build:()=>customGame([[8,4,'OU'],[8,3,'KI'],[8,5,'KI'],[8,2,'GI'],[8,6,'GI'],[8,1,'KE'],[8,7,'KE'],[8,0,'KY'],[8,8,'KY'], ...PAWNROW([0,1,2,3,4,5,6,7,8])]) },
+};
+function cloneState(st){
+  return {
+    board: st.board.map(row=>row.slice()),
+    hands: {S:{...st.hands.S}, G:{...st.hands.G}},
+    turn: st.turn, over: st.over,
+    last: st.last ? {...st.last, to:{...st.last.to}} : null
+  };
+}
+function inBoard(r,c){ return r>=0 && r<9 && c>=0 && c<9; }
+
+// 盤上の駒 (r,c) が進める先（自分の駒がいる場所は除く）
+function pseudoDests(st,r,c){
+  const p=st.board[r][c], res=[];
+  const sign = p.o===S ? 1 : -1;
+  const d=defOf(p.t,p.p);
+  if(d.steps){
+    for(const [dr,dc] of d.steps){
+      const nr=r+dr*sign, nc=c+dc;
+      if(!inBoard(nr,nc)) continue;
+      const q=st.board[nr][nc];
+      if(!q || q.o!==p.o) res.push([nr,nc]);
+    }
+  }
+  if(d.slides){
+    for(const [dr,dc] of d.slides){
+      let nr=r+dr*sign, nc=c+dc;
+      while(inBoard(nr,nc)){
+        const q=st.board[nr][nc];
+        if(!q){ res.push([nr,nc]); }
+        else{ if(q.o!==p.o) res.push([nr,nc]); break; }
+        nr+=dr*sign; nc+=dc;
+      }
+    }
+  }
+  return res;
+}
+function findKing(st,o){
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const p=st.board[r][c];
+    if(p && p.o===o && p.t==='OU') return [r,c];
+  }
+  return null;
+}
+function inCheck(st,o){
+  const k=findKing(st,o);
+  if(!k) return true;
+  const e=other(o);
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const p=st.board[r][c];
+    if(p && p.o===e){
+      for(const [dr,dc] of pseudoDests(st,r,c)){
+        if(dr===k[0] && dc===k[1]) return true;
+      }
+    }
+  }
+  return false;
+}
+// 移動先で今後動けなくなる駒か（歩・香は最奥、桂は奥2列）→ 強制成り／打てない
+function deadEnd(t,r,o){
+  if(t==='FU'||t==='KY') return o===S ? r===0 : r===8;
+  if(t==='KE') return o===S ? r<=1 : r>=7;
+  return false;
+}
+function nifu(st,c,o){
+  for(let r=0;r<9;r++){
+    const p=st.board[r][c];
+    if(p && p.o===o && p.t==='FU' && !p.p) return true;
+  }
+  return false;
+}
+// st を直接変更する（clone した state に使う）
+function applyMove(st,mv){
+  const me=st.turn;
+  if(mv.drop){
+    st.hands[me][mv.drop]--;
+    st.board[mv.to.r][mv.to.c]={t:mv.drop,o:me,p:false};
+  }else{
+    const p=st.board[mv.from.r][mv.from.c];
+    const cap=st.board[mv.to.r][mv.to.c];
+    if(cap) st.hands[me][cap.t]++;
+    st.board[mv.to.r][mv.to.c]={t:p.t,o:me,p:p.p||!!mv.promote};
+    st.board[mv.from.r][mv.from.c]=null;
+  }
+  st.last=mv;
+  st.turn=other(me);
+  return st;
+}
+function legalMoves(st, skipUF){
+  const me=st.turn, res=[];
+  const zone = me===S ? [0,1,2] : [6,7,8];
+  // 盤上の駒
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const p=st.board[r][c];
+    if(!p || p.o!==me) continue;
+    for(const [nr,nc] of pseudoDests(st,r,c)){
+      const canProm = !p.p && p.t!=='KI' && p.t!=='OU' && (zone.includes(r)||zone.includes(nr));
+      const must = deadEnd(p.t,nr,me);
+      const variants = must ? [true] : (canProm ? [false,true] : [false]);
+      for(const promote of variants){
+        const mv={from:{r,c}, to:{r:nr,c:nc}, drop:null, promote};
+        const sim=applyMove(cloneState(st),mv);
+        if(!inCheck(sim,me)) res.push(mv);
+      }
+    }
+  }
+  // 持ち駒を打つ
+  for(const t of HAND_ORDER){
+    if(!st.hands[me][t]) continue;
+    for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+      if(st.board[r][c]) continue;
+      if(deadEnd(t,r,me)) continue;
+      if(t==='FU' && nifu(st,c,me)) continue;
+      const mv={from:null, to:{r,c}, drop:t, promote:false};
+      const sim=applyMove(cloneState(st),mv);
+      if(inCheck(sim,me)) continue;
+      if(t==='FU' && !skipUF && inCheck(sim,other(me))){
+        if(legalMoves(sim,true).length===0) continue; // 打ち歩詰めは禁止
+      }
+      res.push(mv);
+    }
+  }
+  return res;
+}
+/* =====================  よわめCPU（後手）  ===================== */
+function evalMaterial(st,me){
+  let s=0;
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const p=st.board[r][c];
+    if(!p) continue;
+    const v = p.p ? PVAL[p.t] : VAL[p.t];
+    s += p.o===me ? v : -v;
+  }
+  for(const t of HAND_ORDER){
+    s += st.hands[me][t]*VAL[t];
+    s -= st.hands[other(me)][t]*VAL[t];
+  }
+  return s;
+}
+function chooseCpuMove(st){
+  const moves=legalMoves(st);
+  if(moves.length===0) return null;
+  let best=null, bestScore=-Infinity;
+  for(const mv of moves){
+    const sim=applyMove(cloneState(st),mv);
+    const oppMoves=legalMoves(sim,true);
+    let score;
+    if(oppMoves.length===0){
+      score=99999; // 詰み
+    }else{
+      score=evalMaterial(sim,st.turn);
+      // 相手の一番大きいお返し（駒の取り返し）を差し引く
+      let worst=0;
+      for(const om of oppMoves){
+        if(om.drop) continue;
+        const tgt=sim.board[om.to.r][om.to.c];
+        if(tgt){
+          const v=tgt.p?PVAL[tgt.t]:VAL[tgt.t];
+          if(v>worst) worst=v;
+        }
+      }
+      score -= worst*0.9;
+      if(mv.promote) score+=1.5;
+      if(!mv.drop) score+=0.2;
+      score += Math.random()*2.5; // 子供が勝てるように、わざとブレさせる
+    }
+    if(score>bestScore){ bestScore=score; best=mv; }
+  }
+  return best;
+}
+/* =====================  表示まわり  ===================== */
+const NAMES={
+  FU:{k:'歩',f:'ふ'}, KY:{k:'香',f:'きょう'}, KE:{k:'桂',f:'けい'},
+  GI:{k:'銀',f:'ぎん'}, KI:{k:'金',f:'きん'}, KA:{k:'角',f:'かく'},
+  HI:{k:'飛',f:'ひ'}, OU:{k:'王',f:'おう'}
+};
+const PNAMES={
+  FU:{k:'と',f:'と'}, KY:{k:'香',f:'なりきょう'}, KE:{k:'桂',f:'なりけい'},
+  GI:{k:'銀',f:'なりぎん'}, KA:{k:'馬',f:'うま'}, HI:{k:'龍',f:'りゅう'}
+};
+let game=newGame();
+let mode='cpu';          // 'cpu' | 'two'
+let sel=null;            // {from:{r,c}} または {drop:'FU'}
+let cachedMoves=[];
+let undoStack=[];
+let soundOn=true;
+let busy=false;          // CPU思考中・演出中の入力ロック
+
+const boardEl=document.getElementById('board');
+const cells=[];
+for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+  const d=document.createElement('div');
+  d.className='cell';
+  d.dataset.r=r; d.dataset.c=c;
+  d.addEventListener('click',()=>onCell(r,c));
+  boardEl.appendChild(d);
+  cells.push(d);
+}
+function pieceHTML(p){
+  const n = p.p ? PNAMES[p.t] : NAMES[p.t];
+  const kanji = (p.t==='OU' && p.o===G) ? '玉' : n.k;
+  const kana  = (p.t==='OU' && p.o===G) ? 'ぎょく' : n.f;
+  return `<div class="piece ${p.o===G?'gote':''} ${p.p?'prom':''}">
+    <span class="kana">${kana}</span><span class="kanji">${kanji}</span></div>`;
+}
+function render(){
+  const destSet=new Set();
+  if(sel){
+    for(const mv of cachedMoves){
+      const match = sel.drop ? (mv.drop===sel.drop)
+        : (mv.from && mv.from.r===sel.from.r && mv.from.c===sel.from.c);
+      if(match) destSet.add(mv.to.r*9+mv.to.c);
+    }
+  }
+  for(let r=0;r<9;r++) for(let c=0;c<9;c++){
+    const el=cells[r*9+c], p=game.board[r][c];
+    el.innerHTML = p ? pieceHTML(p) : '';
+    el.className='cell';
+    if(sel && sel.from && sel.from.r===r && sel.from.c===c) el.classList.add('sel');
+    if(game.last && game.last.to.r===r && game.last.to.c===c) el.classList.add('last');
+    if(destSet.has(r*9+c)){
+      el.classList.add('dest');
+      if(p) el.classList.add('hascap');
+    }
+  }
+  document.getElementById('handG').classList.toggle('hidden', mode==='tsume');
+  document.getElementById('tsumeBar').classList.toggle('hidden', mode!=='tsume');
+  renderHand(S); renderHand(G);
+  renderTurn();
+  saveGame();
+}
+function renderHand(o){
+  const el=document.getElementById(o===S?'handS':'handG');
+  el.querySelectorAll('.handpiece').forEach(x=>x.remove());
+  for(const t of HAND_ORDER){
+    const n=game.hands[o][t];
+    if(!n) continue;
+    const d=document.createElement('div');
+    d.className='handpiece';
+    if(sel && sel.drop===t && game.turn===o) d.classList.add('sel');
+    d.innerHTML=pieceHTML({t,o,p:false}) + (n>1?`<span class="cnt">${n}</span>`:'');
+    d.addEventListener('click',()=>onHand(o,t));
+    el.appendChild(d);
+  }
+}
+function renderTurn(){
+  const tx=document.getElementById('turnText');
+  if(game.over){
+    tx.textContent='おわり！';
+    return;
+  }
+  if(mode==='tsume'){
+    tx.textContent='🧩 だい'+(tsumeIdx+1)+'もん（'+TSUME[tsumeIdx].d+'てづめ）';
+    return;
+  }
+  if(mode==='cpu'){
+    const pre = setupKey ? '🐣' + SETUPS[setupKey].label + '：' : '';
+    tx.textContent = pre + (game.turn===S ? '🙂 きみの ばん！' : '🤖 コンピュータが かんがえちゅう…');
+  }else{
+    tx.textContent = game.turn===S ? '🔴 したの ひとの ばん' : '🔵 うえの ひとの ばん';
+  }
+}
+/* =====================  入力  ===================== */
+function humanTurn(){
+  return !game.over && !busy && (mode==='two' || game.turn===S);
+}
+function onCell(r,c){
+  if(!humanTurn()) return;
+  const p=game.board[r][c];
+  if(sel){
+    const candidates=cachedMoves.filter(mv=>{
+      const match = sel.drop ? (mv.drop===sel.drop)
+        : (mv.from && mv.from.r===sel.from.r && mv.from.c===sel.from.c);
+      return match && mv.to.r===r && mv.to.c===c;
+    });
+    if(candidates.length>0){
+      commitHuman(candidates);
+      return;
+    }
+  }
+  if(p && p.o===game.turn){
+    sel={from:{r,c}};
+  }else{
+    sel=null;
+  }
+  render();
+}
+function onHand(o,t){
+  if(!humanTurn() || o!==game.turn) return;
+  sel = (sel && sel.drop===t) ? null : {drop:t};
+  render();
+}
+async function commitHuman(candidates){
+  let mv=candidates[0];
+  if(candidates.length===2){ // 成る・成らないを選べる
+    busy=true;
+    const yes=await askPromotion();
+    busy=false;
+    mv=candidates.find(x=>x.promote===yes);
+  }
+  undoStack.push(cloneState(game));
+  doMove(mv);
+}
+function askPromotion(){
+  return new Promise(res=>{
+    const ov=document.getElementById('ovProm');
+    ov.classList.remove('hidden');
+    const done=v=>{ ov.classList.add('hidden'); yesB.onclick=noB.onclick=null; res(v); };
+    const yesB=document.getElementById('promYes'), noB=document.getElementById('promNo');
+    yesB.onclick=()=>done(true);
+    noB.onclick=()=>done(false);
+  });
+}
+/* =====================  進行  ===================== */
+function doMove(mv){
+  const mover=game.turn;
+  applyMove(game,mv);
+  sel=null;
+  playSound('pachi');
+  if(mode==='tsume'){ tsumeHumanMoved(); return; }
+  cachedMoves=legalMoves(game);
+  if(cachedMoves.length===0){
+    game.over=mover;
+    render();
+    setTimeout(showWin,700);
+    return;
+  }
+  if(inCheck(game,game.turn)) showToast('おうて！');
+  render();
+  if(mode==='cpu' && game.turn===G && !game.over){
+    busy=true;
+    setTimeout(cpuTurn,700);
+  }
+}
+function cpuTurn(){
+  const mv=chooseCpuMove(game);
+  busy=false;
+  if(!mv){ game.over=S; showWin(); return; }
+  doMove(mv);
+}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.style.fontSize = msg.length>5 ? '28px' : '54px'; // 長い文は縮めて画面からはみ出さないように
+  t.textContent=msg;
+  t.classList.remove('show');
+  void t.offsetWidth;
+  t.classList.add('show');
+  playSound('oute');
+}
+function showWin(){
+  clearSave(); // 勝敗がついた対局は「つづきから」の対象にしない
+  const ov=document.getElementById('ovWin');
+  const tx=document.getElementById('winText'), sub=document.getElementById('winSub');
+  let humanWin;
+  if(mode==='cpu'){
+    humanWin = game.over===S;
+    tx.textContent = humanWin ? '🎉 きみの かち！' : '🤖 コンピュータの かち…';
+    sub.textContent = humanWin ? 'すごい！ めいじんだね！' : 'おしかった！ もういちど ちょうせんしよう！';
+  }else{
+    humanWin=true;
+    tx.textContent = game.over===S ? '🔴 したの ひとの かち！' : '🔵 うえの ひとの かち！';
+    sub.textContent = 'ふたりとも よくがんばりました！';
+  }
+  const nextB=document.getElementById('btnNext');
+  if(mode==='cpu' && game.over===S && setupKey){
+    const nxt=SETUPS[setupKey].next;
+    nextB.textContent = nxt ? 'つぎの ステージへ ▶' : 'ほんものの しょうぎに ちょうせん！ ▶';
+    nextB.onclick=()=>startGame('cpu', nxt);
+    nextB.classList.remove('hidden');
+  }else{
+    nextB.classList.add('hidden');
+  }
+  ov.classList.remove('hidden');
+  if(humanWin){ confetti(); playSound('win'); }
+}
+function confetti(){
+  const colors=['#ff7043','#ffca28','#66bb6a','#42a5f5','#ab47bc','#ef5350'];
+  for(let i=0;i<90;i++){
+    const d=document.createElement('div');
+    d.className='confetti';
+    d.style.left=Math.random()*100+'vw';
+    d.style.background=colors[i%colors.length];
+    d.style.animationDuration=(2+Math.random()*2.5)+'s';
+    d.style.animationDelay=(Math.random()*1.2)+'s';
+    document.body.appendChild(d);
+    setTimeout(()=>d.remove(),5000);
+  }
+}
+/* =====================  おと  ===================== */
+let actx=null;
+function playSound(kind){
+  if(!soundOn) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const now=actx.currentTime;
+    const note=(freq,t0,dur,vol)=>{
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='triangle'; o.frequency.value=freq;
+      g.gain.setValueAtTime(vol,now+t0);
+      g.gain.exponentialRampToValueAtTime(0.001,now+t0+dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(now+t0); o.stop(now+t0+dur);
+    };
+    if(kind==='pachi'){ note(1900,0,0.06,0.25); note(950,0,0.04,0.15); }
+    if(kind==='oute'){ note(880,0,0.12,0.2); note(660,0.13,0.18,0.2); }
+    if(kind==='win'){ [523,659,784,1047].forEach((f,i)=>note(f,i*0.15,0.3,0.25)); }
+  }catch(e){}
+}
+/* =====================  つめしょうぎ  =====================
+   問題データは dev/tsume_gen.mjs が自動生成し、全問を機械検証してから埋め込んである。
+   b=盤（行 列 駒 持ち主 成り）, h=先手の持ち駒, a=こたえの手, l=3手詰めのこたえ手順。
+   後手の持ち駒は「残り全部」（詰将棋の約束事。飛び道具の王手に合駒で受けられるように）。 */
+const TSUME=[{"d":1,"b":"00OUG0,20KIS0,21FUS0,22FUS0,88OUS0","h":"","a":["M20110","M21111"],"l":null},{"d":1,"b":"06KIS0,08OUG0,16KIS0,17GIG0,18KIG0,26FUS1,80OUS0","h":"","a":["M06070","M16070"],"l":null},{"d":1,"b":"06KIS0,08OUG0,18KEG0,27HIS1,80OUS0","h":"","a":["M06070","M27070"],"l":null},{"d":1,"b":"05OUG0,13FUG0,14FUG0,24KIS0,26KAS0,80OUS0","h":"","a":["M24150","M26151"],"l":null},{"d":1,"b":"00OUG0,02KIS0,11HIS0,22KIS0,88OUS0","h":"","a":["M02010","M11011"],"l":null},{"d":1,"b":"07GIS0,08OUG0,80OUS0","h":"KI1","a":["DKI18"],"l":null},{"d":1,"b":"01OUG0,20FUS1,88OUS0","h":"KI1","a":["DKI11"],"l":null},{"d":1,"b":"08OUG0,18GIG0,27KYS0,80OUS0","h":"KI1","a":["DKI17"],"l":null},{"d":1,"b":"00OUG0,20KIS0,21KIG0,88OUS0","h":"KI1","a":["DKI10"],"l":null},{"d":1,"b":"05OUG0,23FUG0,25FUS0,27FUG0,80OUS0","h":"KI1","a":["DKI15"],"l":null},{"d":1,"b":"04OUG0,12KEG0,25FUS1,88OUS0","h":"KI1","a":["DKI14"],"l":null},{"d":1,"b":"01OUG0,10FUG0,22KIS0,88OUS0","h":"KI1","a":["DKI11"],"l":null},{"d":1,"b":"07OUG0,18GIG0,25KEG0,28FUS1,80OUS0","h":"KI1","a":["DKI17"],"l":null},{"d":1,"b":"03OUG0,04GIG0,22FUS0,24KYS0,88OUS0","h":"KI1","a":["DKI12"],"l":null},{"d":1,"b":"00OUG0,22GIS0,88OUS0","h":"KI1","a":["DKI11"],"l":null},{"d":1,"b":"03OUG0,11KIG0,14GIG0,23KIS0,88OUS0","h":"KI1","a":["DKI13"],"l":null},{"d":1,"b":"05FUS1,07OUG0,16GIG0,26GIS1,27GIS1,80OUS0","h":"","a":["M26170","M27170"],"l":null},{"d":1,"b":"00GIS0,10OUG0,20KIG0,31KYS0,88OUS0","h":"","a":["M00111","M31111"],"l":null},{"d":1,"b":"02OUG0,20GIS0,21GIS1,23KAS1,88OUS0","h":"","a":["M21120","M23120"],"l":null},{"d":1,"b":"01OUG0,11KAS0,13GIS1,21HIS1,88OUS0","h":"","a":["M13020","M13120"],"l":null},{"d":1,"b":"04OUG0,12GIS1,13FUG0,15KEG0,16HIS0,23KAS1,88OUS0","h":"","a":["M12130"],"l":null},{"d":1,"b":"06HIS1,14OUG0,34GIS0,35KAS1,88OUS0","h":"","a":["M34241","M35240"],"l":null},{"d":1,"b":"03OUG0,23KIS0,88OUS0","h":"GI1","a":["DGI13"],"l":null},{"d":1,"b":"08OUG0,16FUS0,17FUG0,28FUS0,80OUS0","h":"GI1","a":["DGI18"],"l":null},{"d":1,"b":"05FUG0,06OUG0,17FUG0,25KIS0,80OUS0","h":"GI1","a":["DGI16"],"l":null},{"d":1,"b":"06GIS0,08OUG0,17GIG0,28FUS0,80OUS0","h":"GI1","a":["DGI18"],"l":null},{"d":1,"b":"06OUG0,08KIS0,16FUG0,26KIS0,80OUS0","h":"GI1","a":["DGI15"],"l":null},{"d":1,"b":"02KEG0,03OUG0,12KIG0,23GIS0,88OUS0","h":"GI1","a":["DGI14"],"l":null},{"d":1,"b":"00FUS1,01FUG0,02OUG0,13GIG0,23FUS1,24HIS1,88OUS0","h":"","a":["M24130"],"l":null},{"d":1,"b":"04OUG0,16GIS0,22HIS1,24FUS1,88OUS0","h":"","a":["M22130"],"l":null},{"d":1,"b":"05GIG0,13FUS1,15OUG0,35GIS0,37HIS1,80OUS0","h":"","a":["M37260"],"l":null},{"d":1,"b":"05OUG0,15FUG0,17HIS1,24GIS0,80OUS0","h":"","a":["M17150","M24151"],"l":null},{"d":1,"b":"04OUG0,05KEG0,16HIS1,23KIG0,24FUS0,88OUS0","h":"","a":["M16140","M24141"],"l":null},{"d":1,"b":"06HIS1,07GIS0,08OUG0,17GIG0,18FUG0,26FUS1,80OUS0","h":"","a":["M06170","M26170"],"l":null},{"d":1,"b":"07GIG0,08OUG0,16HIS1,26KIS0,27KYS0,28GIG0,80OUS0","h":"","a":["M16070","M27071"],"l":null},{"d":1,"b":"01KEG0,02GIS0,10OUG0,31HIS0,88OUS0","h":"","a":["M31111"],"l":null},{"d":1,"b":"04OUG0,12HIS0,16KIG0,22KIS0,23KIS0,88OUS0","h":"","a":["M12141","M23140"],"l":null},{"d":1,"b":"00GIG0,11OUG0,21FUG0,22HIS0,31HIS1,88OUS0","h":"","a":["M31210"],"l":null},{"d":1,"b":"07HIS0,08GIS0,18OUG0,26GIG0,36FUG0,37HIS0,80OUS0","h":"","a":["M37271"],"l":null},{"d":1,"b":"04HIS0,16OUG0,28KIS0,34FUG0,35HIS1,80OUS0","h":"","a":["M04051"],"l":null},{"d":1,"b":"02GIS0,10OUG0,22KAS1,88OUS0","h":"","a":["M22110"],"l":null},{"d":1,"b":"07OUG0,26KAS1,27FUS1,80OUS0","h":"","a":["M26170","M27170"],"l":null},{"d":1,"b":"02KAS1,10OUG0,12GIS0,22FUS1,88OUS0","h":"","a":["M02110"],"l":null},{"d":1,"b":"08OUG0,16KAS1,17GIG0,28GIS1,80OUS0","h":"","a":["M16170","M28170"],"l":null},{"d":1,"b":"07KEG0,08OUG0,16KAS1,28FUS1,80OUS0","h":"","a":["M16170","M28170"],"l":null},{"d":1,"b":"04OUG0,05KIG0,12KAS1,24GIG0,25KAS1,88OUS0","h":"","a":["M12030"],"l":null},{"d":1,"b":"01GIS1,03FUG0,13OUG0,14GIS0,33KAS1,88OUS0","h":"","a":["M33230"],"l":null},{"d":1,"b":"07KAS0,08OUG0,28GIS1,80OUS0","h":"","a":["M07181","M28180"],"l":null},{"d":1,"b":"00KAS0,01FUS1,10OUG0,12FUS1,21GIG0,88OUS0","h":"","a":["M00111"],"l":null},{"d":1,"b":"06KAS0,08OUG0,27FUS1,80OUS0","h":"","a":["M06171","M27170"],"l":null},{"d":1,"b":"00OUG0,01FUG0,02GIG0,12HIS1,22GIG0,88OUS0","h":"KE1","a":["DKE21"],"l":null},{"d":1,"b":"06GIG0,07OUG0,08KIG0,17KEG0,26FUS0,27HIS1,80OUS0","h":"KE1","a":["DKE28"],"l":null},{"d":1,"b":"16HIS1,17GIS0,18OUG0,36GIG0,80OUS0","h":"KE1","a":["DKE37"],"l":null},{"d":1,"b":"06HIS0,07KEG0,08OUG0,17KEG0,18FUG0,26FUS0,80OUS0","h":"KE1","a":["DKE27"],"l":null},{"d":1,"b":"04FUG0,05OUG0,06GIG0,17HIS1,80OUS0","h":"KE1","a":["DKE24","DKE26"],"l":null},{"d":1,"b":"02HIS1,14OUG0,15FUG0,23GIG0,26GIS0,34KIS0,88OUS0","h":"KE1","a":["DKE35"],"l":null},{"d":1,"b":"07OUG0,08KIG0,16FUS0,17KIG0,25HIS1,27HIS1,80OUS0","h":"KE1","a":["DKE26","DKE28"],"l":null},{"d":1,"b":"05OUG0,06KIG0,13HIS0,14HIS0,80OUS0","h":"KE1","a":["DKE24","DKE26"],"l":null},{"d":1,"b":"03KEG0,04OUG0,15FUG0,24KIS0,25KYS0,26KIS0,88OUS0","h":"","a":["M25151","M26150"],"l":null},{"d":1,"b":"07OUG0,15FUG0,17KIG0,25HIS0,27KYS0,28GIS0,80OUS0","h":"","a":["M27171","M28171"],"l":null},{"d":1,"b":"07FUG0,08OUG0,27GIS0,80OUS0","h":"KY1","a":["DKY18"],"l":null},{"d":1,"b":"00OUG0,01KEG0,12HIS1,22FUG0,88OUS0","h":"KY1","a":["DKY10"],"l":null},{"d":1,"b":"08OUG0,16HIS1,80OUS0","h":"KY1","a":["DKY18"],"l":null},{"d":1,"b":"00OUG0,21HIS1,88OUS0","h":"KY1","a":["DKY10"],"l":null},{"d":1,"b":"07OUG0,26FUS1,28KIS0,80OUS0","h":"","a":["M26170","M28170"],"l":null},{"d":1,"b":"05OUG0,24FUS1,25FUS1,80OUS0","h":"","a":["M24150","M25150"],"l":null},{"d":1,"b":"03OUG0,05KIS0,21FUS1,23GIS1,88OUS0","h":"","a":["M21120"],"l":null},{"d":1,"b":"00OUG0,01KEG0,10FUG0,20FUS1,22FUS1,88OUS0","h":"","a":["M20110","M22110"],"l":null},{"d":1,"b":"02OUG0,20KIS0,21FUS1,22FUS1,24KIG0,88OUS0","h":"","a":["M21120","M22120"],"l":null},{"d":1,"b":"07FUS1,08KAS0,17GIG0,18OUG0,28KIG0,36GIS0,80OUS0","h":"","a":["M07170","M08171"],"l":null},{"d":3,"b":"00OUG0,02KAS1,88OUS0","h":"HI1,FU1","a":["DHI01"],"l":["DHI01","M00100","M01111"]},{"d":3,"b":"05OUG0,06KEG0,25KAS1,80OUS0","h":"HI1,FU1","a":["DHI15"],"l":["DHI15","M05040","M15141"]},{"d":3,"b":"00KEG0,01OUG0,22GIS0,88OUS0","h":"HI1","a":["DHI11"],"l":["DHI11","M01020","M11121"]},{"d":3,"b":"08OUG0,16KIS0,26KEG0,80OUS0","h":"HI1,FU1","a":["DHI07"],"l":["DHI07","M08180","M07171"]},{"d":3,"b":"07KIG0,08OUG0,27FUS0,28GIS0,80OUS0","h":"KI1,GI1","a":["DKI17"],"l":["DKI17","M07170","M27171"]},{"d":3,"b":"06HIS0,08FUS1,17OUG0,26KEG0,80OUS0","h":"KI2","a":["M06071"],"l":["M06071","M17280","DKI37"]},{"d":3,"b":"04FUG0,15OUG0,26HIS0,37FUG0,80OUS0","h":"KI1,GI1","a":["DKI25"],"l":["DKI25","M15050","M26161"]},{"d":3,"b":"00KIS0,12OUG0,33KAS1,88OUS0","h":"HI1,KI1","a":["DHI11"],"l":["DHI11","M12020","DKI12"]},{"d":3,"b":"10OUG0,22HIS0,30FUS0,88OUS0","h":"GI1","a":["M30201"],"l":["M30201","M10000","DGI10"]},{"d":3,"b":"05OUG0,23KIS0,24KIS0,80OUS0","h":"HI1,GI1","a":["DHI15"],"l":["DHI15","M05040","M15141"]},{"d":3,"b":"07OUG0,15FUS0,27GIS0,80OUS0","h":"HI1,FU1","a":["DHI17"],"l":["DHI17","M07060","M17161"]},{"d":3,"b":"08KIG0,16FUG0,18OUG0,36HIS1,80OUS0","h":"GI1,FU1","a":["DGI27"],"l":["DGI27","M18280","M36380"]},{"d":3,"b":"02KIG0,05GIS0,13OUG0,33KAS1,88OUS0","h":"KI1","a":["DKI23"],"l":["DKI23","M13030","M05140"]},{"d":3,"b":"05FUG0,13OUG0,15GIS0,32KAS1,88OUS0","h":"HI1,KI1","a":["DHI14"],"l":["DHI14","M13030","DKI12"]},{"d":3,"b":"14OUG0,26HIS1,88OUS0","h":"KI1,GI1","a":["DKI23"],"l":["DKI23","M14040","DGI14"]},{"d":3,"b":"11OUG0,30KIS0,88OUS0","h":"KI2","a":["DKI21"],"l":["DKI21","M11010","DKI11"]},{"d":3,"b":"00OUG0,01KIG0,02FUS1,11FUG0,12FUS1,20KAS0,88OUS0","h":"KI1","a":["M02011"],"l":["M02011","M00100","M20111"]},{"d":3,"b":"03KIG0,12OUG0,24FUG0,31KIS0,33KAS1,88OUS0","h":"GI1,FU1","a":["M31220"],"l":["M31220","M12020","DGI11"]},{"d":3,"b":"10KYS0,11OUG0,22KEG0,32FUS1,33KIG0,88OUS0","h":"KI2","a":["DKI21"],"l":["DKI21","M11010","DKI11"]},{"d":3,"b":"12OUG0,21KEG0,24HIS0,88OUS0","h":"KI1,GI1","a":["DGI22"],"l":["DGI22","M12020","DKI12"]},{"d":3,"b":"16OUG0,34FUS1,37GIS0,80OUS0","h":"KI2","a":["DKI26"],"l":["DKI26","M16060","DKI16"]},{"d":3,"b":"01GIS0,13OUG0,22FUG0,23KEG0,34GIS0,88OUS0","h":"KI1,GI1","a":["DGI24"],"l":["DGI24","M13030","DKI13"]},{"d":3,"b":"11OUG0,31KIS0,32FUS0,88OUS0","h":"HI1,KI1","a":["M32221"],"l":["M32221","M11010","DKI11"]},{"d":3,"b":"00OUG0,11HIS0,22HIS0,88OUS0","h":"GI1","a":["M22021"],"l":["M22021","DKA01","M02010"]},{"d":3,"b":"07OUG0,16FUG0,17GIG0,28KAS1,80OUS0","h":"HI1,GI1","a":["DHI05"],"l":["DHI05","M17060","M05060"]},{"d":3,"b":"08OUG0,26HIS0,80OUS0","h":"KI1","a":["M26281"],"l":["M26281","M08070","DKI17"]},{"d":3,"b":"00OUG0,21HIS0,22FUS0,88OUS0","h":"GI1,FU1","a":["M21201"],"l":["M21201","M00010","DGI11"]},{"d":3,"b":"06OUG0,14HIS0,24HIS0,80OUS0","h":"GI1,FU1","a":["M24260"],"l":["M24260","M06050","M26161"]},{"d":3,"b":"00FUG0,10OUG0,21FUG0,22GIS0,31HIS0,88OUS0","h":"KI1","a":["M31300"],"l":["M31300","M10010","DKI11"]},{"d":3,"b":"06OUG0,07FUG0,17FUS0,28HIS1,80OUS0","h":"KI1,GI1","a":["M28260"],"l":["M28260","M06050","DKI15"]}];
+const TSUME_KEY='kodomo-shogi-tsume-v1';
+let tsumeIdx=null;   // いま解いている問題番号（0はじまり）
+let tsumeMoves=0;    // この問題で先手が指した手数
+
+function tsumeState(p){
+  const b=[...Array(9)].map(()=>Array(9).fill(null));
+  for(const s of p.b.split(',')){
+    b[+s[0]][+s[1]]={t:s.slice(2,4), o:s[4], p:s[5]==='1'};
+  }
+  const hS=emptyHand();
+  if(p.h) for(const s of p.h.split(',')) hS[s.slice(0,2)]=+s.slice(2);
+  const TOTALS={FU:18,KY:4,KE:4,GI:4,KI:4,KA:2,HI:2};
+  const used={FU:0,KY:0,KE:0,GI:0,KI:0,KA:0,HI:0};
+  for(let r=0;r<9;r++)for(let c=0;c<9;c++){ const q=b[r][c]; if(q&&q.t!=='OU') used[q.t]++; }
+  const hG=emptyHand();
+  for(const t of HAND_ORDER) hG[t]=TOTALS[t]-used[t]-hS[t];
+  return {board:b, hands:{S:hS,G:hG}, turn:S, over:null, last:null};
+}
+function decMove(s){
+  if(s[0]==='D') return {from:null, to:{r:+s[3],c:+s[4]}, drop:s.slice(1,3), promote:false};
+  return {from:{r:+s[1],c:+s[2]}, to:{r:+s[3],c:+s[4]}, drop:null, promote:s[5]==='1'};
+}
+function tsumeProgress(){
+  try{ return new Set(JSON.parse(localStorage.getItem(TSUME_KEY))||[]); }catch(e){ return new Set(); }
+}
+function tsumeMarkCleared(i){
+  try{
+    const s=tsumeProgress(); s.add(i);
+    localStorage.setItem(TSUME_KEY, JSON.stringify([...s]));
+  }catch(e){}
+}
+function startTsume(i){
+  mode='tsume'; setupKey=null; tsumeIdx=i; tsumeMoves=0;
+  game=tsumeState(TSUME[i]);
+  sel=null; undoStack=[]; busy=false;
+  started=false;   // 通常対局のとちゅう保存に触らないため
+  cachedMoves=legalMoves(game);
+  closeStartOverlays();
+  render();
+}
+// この局面から先手が1手で詰ませられるか
+function tsumeHasMate(st){
+  for(const mv of legalMoves(st)){
+    const sim=applyMove(cloneState(st),mv);
+    if(inCheck(sim,G) && legalMoves(sim).length===0) return true;
+  }
+  return false;
+}
+// 相手の受け: 詰まされない手があればそれ（いちばんねばる）、なければ最初の手
+function tsumeBestReply(gMoves){
+  for(const m of gMoves){
+    const sim=applyMove(cloneState(game),m);
+    if(!tsumeHasMate(sim)) return m;
+  }
+  return gMoves[0];
+}
+function tsumeHumanMoved(){
+  tsumeMoves++;
+  const p=TSUME[tsumeIdx];
+  const inChk=inCheck(game,G);
+  const gMoves=legalMoves(game);
+  cachedMoves=[];
+  render();
+  if(gMoves.length===0 && inChk){ tsumeCleared(); return; }
+  if(!inChk){ tsumeFail('おうてを かけよう！'); return; }
+  if(tsumeMoves >= (p.d+1)/2){ tsumeFail('つまなかった… もういちど！'); return; }
+  busy=true;   // 3手詰め: 相手の受けを考える
+  setTimeout(()=>{
+    applyMove(game, tsumeBestReply(gMoves));
+    playSound('pachi');
+    cachedMoves=legalMoves(game);
+    busy=false;
+    render();
+  },600);
+}
+function tsumeFail(msg){
+  busy=true;
+  showToast(msg);
+  setTimeout(()=>{ startTsume(tsumeIdx); },1500);
+}
+function tsumeCleared(){
+  tsumeMarkCleared(tsumeIdx);
+  playSound('win');
+  confetti();
+  showToast('つみ！');
+  busy=true;
+  setTimeout(()=>{
+    busy=false;
+    const done=tsumeProgress().size;
+    document.getElementById('tsumeClearText').textContent =
+      done>=TSUME.length ? '👑 ぜんぶクリア！すごい！！' : '🎉 だい'+(tsumeIdx+1)+'もん せいかい！';
+    document.getElementById('btnTsumeNext').classList.toggle('hidden', tsumeIdx+1>=TSUME.length);
+    document.getElementById('ovTsumeClear').classList.remove('hidden');
+  },1100);
+}
+// こたえを見る: 手順を自動で動かして見せる。クリア扱いにはしない
+async function tsumeShowAnswer(){
+  if(busy) return;
+  busy=true;
+  const p=TSUME[tsumeIdx];
+  game=tsumeState(p); sel=null; cachedMoves=[]; undoStack=[];
+  render();
+  const wait=ms=>new Promise(r=>setTimeout(r,ms));
+  const seq = p.d===3 ? p.l : [p.a[0]];
+  showToast('こたえだよ！');
+  await wait(1000);
+  for(const ms of seq){
+    applyMove(game, decMove(ms));
+    playSound('pachi');
+    render();
+    await wait(1000);
+  }
+  await wait(800);
+  busy=false;
+  startTsume(tsumeIdx);   // 見終わったら問題をもとに戻す
+}
+function openTsumeList(){
+  const done=tsumeProgress();
+  const fill=(elId, from, to)=>{
+    const box=document.getElementById(elId);
+    box.innerHTML='';
+    for(let i=from;i<to;i++){
+      const b=document.createElement('button');
+      b.textContent=i+1;
+      if(done.has(i)) b.classList.add('done');
+      b.onclick=()=>startTsume(i);
+      box.appendChild(b);
+    }
+  };
+  fill('tsumeGrid1',0,70);
+  fill('tsumeGrid3',70,100);
+  document.getElementById('ovTsumeClear').classList.add('hidden');
+  document.getElementById('ovTsume').classList.remove('hidden');
+}
+/* =====================  とちゅう保存（じどう）  =====================
+   1手ごとに render() から呼ばれて localStorage へ書く。
+   ブラウザを閉じても、次にひらいたとき「つづきから あそぶ」で再開できる。 */
+const SAVE_KEY='kodomo-shogi-save-v1';
+let started=false; // モードを選んで対局が始まったか（選択画面では保存しない）
+function saveGame(){
+  if(!started) return;
+  if(game.over){ clearSave(); return; } // 終わった対局は「つづきから」に出さない
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1, mode, setupKey, game, undoStack}));
+  }catch(e){}
+}
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
+function loadSave(){
+  try{
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(!d || d.v!==1) return null;
+    const g=d.game;
+    if(!g || !Array.isArray(g.board) || g.board.length!==9) return null;
+    if(g.board.some(row=>!Array.isArray(row) || row.length!==9)) return null;
+    if(!g.hands || !g.hands.S || !g.hands.G) return null;
+    if(g.turn!==S && g.turn!==G) return null;
+    if(g.over) return null;
+    if(d.setupKey && !SETUPS[d.setupKey]) return null;
+    if(d.mode!=='cpu' && d.mode!=='two') return null;
+    if(!Array.isArray(d.undoStack)) return null;
+    return d;
+  }catch(e){ return null; }
+}
+function resumeGame(d){
+  mode=d.mode; setupKey=d.setupKey||null;
+  game=d.game; undoStack=d.undoStack;
+  sel=null; busy=false; started=true;
+  cachedMoves=legalMoves(game);
+  closeStartOverlays();
+  render();
+  // CPUの手番の途中で閉じた場合、再開時にCPUに指させないと止まってしまう
+  if(mode==='cpu' && game.turn===G && !game.over){
+    busy=true;
+    setTimeout(cpuTurn,700);
+  }
+}
+/* =====================  ボタン  ===================== */
+let setupKey=null; // れんしゅうモードのステージ（null=本将棋）
+function closeStartOverlays(){
+  document.getElementById('btnResume').classList.add('hidden');
+  document.getElementById('ovMode').classList.add('hidden');
+  document.getElementById('ovPractice').classList.add('hidden');
+  document.getElementById('ovWin').classList.add('hidden');
+  document.getElementById('ovTsume').classList.add('hidden');
+  document.getElementById('ovTsumeClear').classList.add('hidden');
+}
+function startGame(m, sk){
+  mode=m; setupKey=sk||null;
+  game = setupKey ? SETUPS[setupKey].build() : newGame();
+  sel=null; undoStack=[]; busy=false; started=true;
+  cachedMoves=legalMoves(game);
+  closeStartOverlays();
+  render();
+}
+document.getElementById('modeCpu').onclick=()=>startGame('cpu');
+document.getElementById('modeTwo').onclick=()=>startGame('two');
+document.getElementById('modePractice').onclick=()=>document.getElementById('ovPractice').classList.remove('hidden');
+document.querySelectorAll('#ovPractice [data-stage]').forEach(b=>{
+  b.onclick=()=>startGame('cpu', b.dataset.stage);
+});
+document.getElementById('btnAgain').onclick=()=>startGame(mode, setupKey);
+document.getElementById('btnChangeMode').onclick=()=>{
+  document.getElementById('ovWin').classList.add('hidden');
+  refreshResume();
+  document.getElementById('ovMode').classList.remove('hidden');
+};
+/* つめしょうぎのボタン */
+document.getElementById('modeTsume').onclick=()=>{
+  document.getElementById('ovMode').classList.add('hidden');
+  openTsumeList();
+};
+document.getElementById('btnTsumeList').onclick=()=>{ if(!busy) openTsumeList(); };
+document.getElementById('btnTsumeAns').onclick=()=>tsumeShowAnswer();
+document.getElementById('btnTsumeMode').onclick=()=>{
+  if(busy) return;
+  refreshResume();
+  document.getElementById('ovMode').classList.remove('hidden');
+};
+document.getElementById('btnTsumeClose').onclick=()=>{
+  document.getElementById('ovTsume').classList.add('hidden');
+  // 問題を解いている途中でなければモード選択へ戻す
+  if(mode!=='tsume' || tsumeIdx===null){
+    refreshResume();
+    document.getElementById('ovMode').classList.remove('hidden');
+  }
+};
+document.getElementById('btnTsumeNext').onclick=()=>{
+  document.getElementById('ovTsumeClear').classList.add('hidden');
+  if(tsumeIdx+1<TSUME.length) startTsume(tsumeIdx+1);
+  else openTsumeList();
+};
+document.getElementById('btnTsumeBackList').onclick=()=>openTsumeList();
+document.getElementById('btnReset').onclick=()=>{
+  if(mode==='tsume'){ if(!busy && tsumeIdx!==null) startTsume(tsumeIdx); return; }
+  if(game.over || confirm('さいしょから やりなおす？')) startGame(mode, setupKey);
+};
+document.getElementById('btnUndo').onclick=()=>{
+  // つめしょうぎは短いので、まった＝その問題のやりなおし
+  if(mode==='tsume'){ if(!busy && tsumeIdx!==null) startTsume(tsumeIdx); return; }
+  if(busy || undoStack.length===0) return;
+  game=undoStack.pop();
+  sel=null;
+  cachedMoves=legalMoves(game);
+  document.getElementById('ovWin').classList.add('hidden');
+  render();
+};
+document.getElementById('btnSound').onclick=e=>{
+  soundOn=!soundOn;
+  e.target.textContent = soundOn ? '🔊' : '🔇';
+};
+document.getElementById('btnHow').onclick=()=>document.getElementById('ovHow').classList.remove('hidden');
+document.getElementById('btnZukan').onclick=()=>document.getElementById('ovZukan').classList.remove('hidden');
+document.querySelectorAll('[data-close]').forEach(b=>{
+  b.onclick=()=>b.closest('.overlay').classList.add('hidden');
+});
+/* =====================  こまのうごき ずかん  ===================== */
+(function buildZukan(){
+  const items=[
+    {name:'歩（ふ）', t:'FU', p:false, desc:'まえに 1マスだけ すすめるよ。'},
+    {name:'香（きょう）', t:'KY', p:false, desc:'まえに どこまでも すすめるよ。'},
+    {name:'桂（けい）', t:'KE', p:false, desc:'ななめまえに ぴょんと ジャンプ！ こまを とびこえられるよ。'},
+    {name:'銀（ぎん）', t:'GI', p:false, desc:'まえと ななめに 1マス。'},
+    {name:'金（きん）', t:'KI', p:false, desc:'ななめうしろ いがいに 1マス。'},
+    {name:'角（かく）', t:'KA', p:false, desc:'ななめに どこまでも すすめるよ。'},
+    {name:'飛（ひ）', t:'HI', p:false, desc:'たてと よこに どこまでも すすめるよ。'},
+    {name:'王・玉（おう）', t:'OU', p:false, desc:'どのむきにも 1マス。とられたら まけだよ！'},
+    {name:'と（歩がなる）', t:'FU', p:true, desc:'金と おなじ うごきに パワーアップ！'},
+    {name:'馬（角がなる）', t:'KA', p:true, desc:'ななめ どこまでも ＋ まわり1マス。'},
+    {name:'龍（飛がなる）', t:'HI', p:true, desc:'たてよこ どこまでも ＋ ななめ1マス。いちばん つよい！'},
+  ];
+  const box=document.getElementById('zukanBox');
+  const arrows={'-1,0':'↑','1,0':'↓','0,-1':'←','0,1':'→','-1,-1':'↖','-1,1':'↗','1,-1':'↙','1,1':'↘'};
+  for(const it of items){
+    const d=defOf(it.t,it.p);
+    const grid=[...Array(5)].map(()=>Array(5).fill(''));
+    const cls=[...Array(5)].map(()=>Array(5).fill(''));
+    if(d.steps) for(const [dr,dc] of d.steps){
+      const r=2+dr, c=2+dc;
+      if(r>=0&&r<5&&c>=0&&c<5){ cls[r][c]='st'; grid[r][c]='●'; }
+    }
+    if(d.slides) for(const [dr,dc] of d.slides){
+      for(let k=1;k<=2;k++){
+        const r=2+dr*k, c=2+dc*k;
+        if(r>=0&&r<5&&c>=0&&c<5){ cls[r][c]='sl'; grid[r][c]=arrows[dr+','+dc]; }
+      }
+    }
+    const n = it.p ? PNAMES[it.t] : NAMES[it.t];
+    grid[2][2]=n.k; cls[2][2]='me';
+    let cellsHtml='';
+    for(let r=0;r<5;r++) for(let c=0;c<5;c++){
+      cellsHtml+=`<div class="${cls[r][c]}">${grid[r][c]}</div>`;
+    }
+    const el=document.createElement('div');
+    el.className='zitem';
+    el.innerHTML=`<div class="zname">${it.name}</div><div class="zgrid">${cellsHtml}</div><div class="zdesc">${it.desc}</div>`;
+    box.appendChild(el);
+  }
+})();
+/* テスト用フック（ブラウザ検証で使用） */
+window.SHOGI={ newGame, legalMoves, applyMove, cloneState, inCheck, chooseCpuMove,
+  state:()=>game, setState:s=>{ game=s; cachedMoves=legalMoves(game); render(); },
+  moves:()=>cachedMoves, doMove, startGame,
+  saveGame, loadSave, clearSave, resumeGame, SAVE_KEY,
+  TSUME, startTsume, tsumeState, decMove, tsumeProgress, TSUME_KEY };
+/* とちゅう保存が のこっていれば「つづきから」を出す（モード選択を開くたびに呼ぶ） */
+function refreshResume(){
+  const b=document.getElementById('btnResume');
+  const d=loadSave();
+  if(!d){ b.classList.add('hidden'); b.onclick=null; return; }
+  const label = d.mode==='two' ? 'ふたりで たいせん'
+    : (d.setupKey ? SETUPS[d.setupKey].label : 'コンピュータと たいせん');
+  b.textContent='▶ つづきから あそぶ（'+label+'）';
+  b.classList.remove('hidden');
+  b.onclick=()=>resumeGame(d);
+}
+refreshResume();
+/* つめしょうぎ全問の自動検証。index.html?test=tsume で開くと走る。
+   埋め込みデータが壊れていないか、こたえが本当に詰むかを実機のエンジンで確かめる */
+async function runTsumeTest(){
+  const tx=document.getElementById('turnText');
+  const same=(a,b)=> a.drop===b.drop && a.promote===b.promote
+    && a.to.r===b.to.r && a.to.c===b.to.c
+    && (!!a.from===!!b.from) && (!a.from || (a.from.r===b.from.r && a.from.c===b.from.c));
+  let ok=0; const ng=[];
+  for(let i=0;i<TSUME.length;i++){
+    const p=TSUME[i];
+    let good=false;
+    try{
+      const st=tsumeState(p);
+      if(!inCheck(st,S) && !inCheck(st,G)){
+        const legal=legalMoves(st);
+        if(p.d===1){
+          // 記録されたこたえが全部、合法手かつ1手で詰みか
+          good = p.a.length>0 && p.a.every(a=>{
+            const mv=decMove(a);
+            if(!legal.some(m=>same(m,mv))) return false;
+            const sim=applyMove(cloneState(st),mv);
+            return inCheck(sim,G) && legalMoves(sim).length===0;
+          });
+        }else{
+          // 記録された初手が合法な王手で、どう受けても次に詰むか
+          const m1=decMove(p.a[0]);
+          if(legal.some(m=>same(m,m1))){
+            const s1=applyMove(cloneState(st),m1);
+            if(inCheck(s1,G)){
+              const replies=legalMoves(s1);
+              good = replies.length>0 && replies.every(m2=>tsumeHasMate(applyMove(cloneState(s1),m2)));
+            }
+          }
+        }
+      }
+    }catch(e){ good=false; }
+    if(good) ok++; else ng.push(i+1);
+    if(i%10===9 || i===TSUME.length-1){
+      tx.textContent='つめしょうぎ けんてい中… '+(i+1)+'/'+TSUME.length;
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+  const msg='つめしょうぎ検証: '+ok+'/'+TSUME.length+' 合格'+(ng.length?(' NG='+ng.join(',')):'');
+  console.log(msg);
+  document.getElementById('turnText').textContent=msg;
+  return {ok, total:TSUME.length, ng};
+}
+window.SHOGI.runTsumeTest=runTsumeTest;
+if(/[?&]test=tsume/.test(location.search)) setTimeout(runTsumeTest, 300);
+render();
+</script>
+</body>
+</html>
